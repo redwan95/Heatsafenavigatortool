@@ -76,7 +76,7 @@ Imagine you have two paths to get from Point A to Point B:
 
 ### 1. Data Mocking
 To ensure the app works without a complex backend, we use a static JSON structure located at `/public/api/research/summary.json`. This contains:
-*   Historical UTCI data (2020-2026).
+*   Historical UTCI data (2015-2026).
 *   City-specific heatwave statistics.
 *   Exposure reduction metrics.
 

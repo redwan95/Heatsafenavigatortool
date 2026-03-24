@@ -102,8 +102,8 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({ data, selectedCity
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 h-[300px]">
+        <div className="space-y-8">
+          <div className="h-[350px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--chart-grid)" />
@@ -137,7 +137,7 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({ data, selectedCity
             </ResponsiveContainer>
           </div>
 
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
               <h4 className="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-2">Heatwave Summary ({selectedMonthName} {selectedYearFromDate})</h4>
               <div className="space-y-3">
@@ -160,10 +160,10 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({ data, selectedCity
               </div>
             </div>
             
-            <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50">
+            <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50 flex flex-col justify-center">
               <p className="text-[10px] font-mono text-rose-400 uppercase tracking-widest mb-1">Critical Alert</p>
               <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">
-                Heatwave frequency in {selectedData.name} has increased by 15% since 2020, with peak UTCI values consistently exceeding 40°C.
+                Heatwave frequency in {selectedData.name} has increased by 15% since 2015, with peak UTCI values consistently exceeding 40°C.
               </p>
             </div>
 
@@ -212,7 +212,7 @@ export const ResearchPanel: React.FC<ResearchPanelProps> = ({ data, selectedCity
       <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="font-serif italic text-2xl dark:text-white">Yearly Thermal Trends (2020-2026)</h3>
+            <h3 className="font-serif italic text-2xl dark:text-white">Yearly Thermal Trends (2015-2026)</h3>
             <p className="text-xs text-slate-400 font-mono uppercase tracking-widest mt-1">Longitudinal Analysis for {selectedData.name}</p>
           </div>
           <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-100 dark:border-slate-700">

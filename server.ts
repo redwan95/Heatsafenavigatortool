@@ -13,7 +13,7 @@ async function startServer() {
 
   // Mock Research Data API with Yearly Stats
   app.get("/api/research/summary", (req, res) => {
-    const years = ["2020", "2021", "2022", "2023", "2024", "2025", "2026"];
+    const years = ["2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026"];
     const cities = [
       { id: "mumbai", name: "Mumbai, India", utci_max: 38.2, exposure_reduction: 24.5, heatwave_days: 12 },
       { id: "dhaka", name: "Dhaka, Bangladesh", utci_max: 40.1, exposure_reduction: 28.2, heatwave_days: 18 },

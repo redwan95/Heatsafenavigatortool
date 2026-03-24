@@ -275,7 +275,7 @@ export default function App() {
           <div>
             <label className="text-[10px] font-mono text-slate-400 uppercase tracking-widest mb-2 block">Analysis Year</label>
             <div className="grid grid-cols-4 gap-1">
-              {["2020", "2021", "2022", "2023", "2024", "2025", "2026"].map(year => (
+              {["2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026"].map(year => (
                 <button
                   key={year}
                   onClick={() => setSelectedYear(year)}

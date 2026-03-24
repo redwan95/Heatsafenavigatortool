@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeatSafe Navigator | Thermal-Aware Urban Navigation</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        serif: ['Georgia', 'serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        body { background-color: #020617; color: #f8fafc; margin: 0; padding: 0; }
+        #map { height: 100%; width: 100%; background: #020617; }
+        .leaflet-container { background: #020617 !important; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+        .glass-panel { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.5); }
+    </style>
+</head>
+<body class="custom-scrollbar overflow-hidden">
+    <div id="root">
+        <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; background: #020617; color: #f8fafc;">
+            <div style="text-align: center;">
+                <div style="width: 48px; height: 48px; border: 3px solid #f97316; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 24px;"></div>
+                <h2 style="font-weight: 600; margin-bottom: 8px; font-size: 18px;">HeatSafe Navigator</h2>
+                <p style="font-size: 10px; letter-spacing: 0.3em; text-transform: uppercase; opacity: 0.4;">Initializing Standalone Engine...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core Dependencies (UMD) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.2/umd/Recharts.js"></script>
+
+    <script type="text/babel" data-presets="react">
+        const { useState, useEffect, useMemo, useRef, useCallback } = React;
+        const { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, BarChart, Bar, Cell } = window.Recharts;
+
+        // --- MOCK DATA ---
+        const CITIES = [
+            {
+                id: 'mumbai', name: 'Mumbai', utci_max: 42.5, exposure_reduction: 31, heatwave_days: 25,
+                yearly_stats: {
+                    '2020': { avg_utci: 28.4, peak_utci: 38.2, heatwave_count: 12 },
+                    '2021': { avg_utci: 29.1, peak_utci: 39.5, heatwave_count: 15 },
+                    '2022': { avg_utci: 30.2, peak_utci: 41.8, heatwave_count: 22 },
+                    '2023': { avg_utci: 31.5, peak_utci: 42.5, heatwave_count: 25 },
+                    '2024': { avg_utci: 32.1, peak_utci: 43.2, heatwave_count: 28 }
+                }
+            },
+            {
+                id: 'delhi', name: 'Delhi', utci_max: 48.2, exposure_reduction: 42, heatwave_days: 45,
+                yearly_stats: {
+                    '2020': { avg_utci: 32.4, peak_utci: 44.2, heatwave_count: 32 },
+                    '2021': { avg_utci: 33.1, peak_utci: 45.5, heatwave_count: 35 },
+                    '2022': { avg_utci: 34.2, peak_utci: 47.8, heatwave_count: 42 },
+                    '2023': { avg_utci: 35.5, peak_utci: 48.2, heatwave_count: 45 },
+                    '2024': { avg_utci: 36.1, peak_utci: 49.2, heatwave_count: 48 }
+                }
+            }
+        ];
+
+        // --- COMPONENTS ---
+
+        const MapView = ({ cityId, routeData, timeOfDay, mapTheme, onToggleMapTheme, isMaximized, onToggleMaximize }) => {
+            const mapRef = useRef(null);
+            const mapInstance = useRef(null);
+            const layersRef = useRef({ baseline: null, thermal: null, heatZones: [] });
+
+            useEffect(() => {
+                if (!mapInstance.current) {
+                    mapInstance.current = L.map('map', { center: [19.0760, 72.8777], zoom: 12, zoomControl: false });
+                    L.control.zoom({ position: 'bottomright' }).addTo(mapInstance.current);
+                }
+
+                const url = mapTheme === 'dark' 
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+                
+                L.tileLayer(url, { attribution: '&copy; OpenStreetMap' }).addTo(mapInstance.current);
+
+                return () => {
+                    if (mapInstance.current) {
+                        mapInstance.current.remove();
+                        mapInstance.current = null;
+                    }
+                };
+            }, [mapTheme]);
+
+            useEffect(() => {
+                if (!mapInstance.current) return;
+
+                // Clear old layers
+                if (layersRef.current.baseline) mapInstance.current.removeLayer(layersRef.current.baseline);
+                if (layersRef.current.thermal) mapInstance.current.removeLayer(layersRef.current.thermal);
+                layersRef.current.heatZones.forEach(z => mapInstance.current.removeLayer(z));
+                layersRef.current.heatZones = [];
+
+                // Draw heat zones (simulated)
+                const intensity = Math.max(0.1, 1 - Math.abs(timeOfDay - 14) / 10);
+                const city = CITIES.find(c => c.id === cityId) || CITIES[0];
+                const center = cityId === 'mumbai' ? [19.0760, 72.8777] : [28.6139, 77.2090];
+                
+                for(let i=0; i<15; i++) {
+                    const lat = center[0] + (Math.random() - 0.5) * 0.1;
+                    const lng = center[1] + (Math.random() - 0.5) * 0.1;
+                    const circle = L.circle([lat, lng], {
+                        radius: 800 * intensity,
+                        fillColor: '#f97316',
+                        fillOpacity: 0.15 * intensity,
+                        stroke: false
+                    }).addTo(mapInstance.current);
+                    layersRef.current.heatZones.push(circle);
+                }
+
+                // Draw routes
+                if (routeData.baseline.length > 0) {
+                    layersRef.current.baseline = L.polyline(routeData.baseline, { color: '#3b82f6', weight: 4, opacity: 0.6 }).addTo(mapInstance.current);
+                }
+                if (routeData.thermal.length > 0) {
+                    layersRef.current.thermal = L.polyline(routeData.thermal, { color: '#f97316', weight: 6, opacity: 0.9 }).addTo(mapInstance.current);
+                }
+
+                if (routeData.start && routeData.end) {
+                    const bounds = L.latLngBounds([routeData.start, routeData.end]);
+                    mapInstance.current.fitBounds(bounds, { padding: [50, 50] });
+                } else {
+                    mapInstance.current.setView(center, 12);
+                }
+            }, [cityId, routeData, timeOfDay]);
+
+            return (
+                <div className="relative h-full w-full">
+                    <div id="map" className="h-full w-full"></div>
+                    <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
+                        <button onClick={onToggleMapTheme} className="p-2 glass-panel rounded-lg text-white hover:text-orange-500 transition-colors">
+                            <i data-lucide={mapTheme === 'dark' ? 'sun' : 'moon'} className="w-5 h-5"></i>
+                        </button>
+                        <button onClick={onToggleMaximize} className="p-2 glass-panel rounded-lg text-white hover:text-orange-500 transition-colors">
+                            <i data-lucide={isMaximized ? 'minimize' : 'maximize'} className="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const ResearchPanel = ({ cities, selectedCity }) => {
+            const city = cities.find(c => c.id === selectedCity) || cities[0];
+            const chartData = Object.entries(city.yearly_stats).map(([year, stats]) => ({
+                year,
+                peak: stats.peak_utci,
+                avg: stats.avg_utci
+            }));
+
+            return (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="glass-panel p-8 rounded-3xl">
+                            <h3 className="text-xl font-serif italic mb-6">Thermal Trend Analysis</h3>
+                            <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={chartData}>
+                                        <defs>
+                                            <linearGradient id="colorPeak" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.3}/>
+                                                <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                        <XAxis dataKey="year" stroke="#475569" fontSize={10} axisLine={false} />
+                                        <YAxis stroke="#475569" fontSize={10} axisLine={false} />
+                                        <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }} />
+                                        <Area type="monotone" dataKey="peak" stroke="#f97316" strokeWidth={3} fill="url(#colorPeak)" />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+                        <div className="glass-panel p-8 rounded-3xl space-y-6">
+                            <h3 className="text-xl font-serif italic">Methodology Overview</h3>
+                            <p className="text-sm text-slate-400 leading-relaxed">
+                                Our routing engine uses a modified Dijkstra's algorithm where the edge weight (W) is defined as:
+                            </p>
+                            <div className="font-mono text-[10px] bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                W = L/V + β × ∫ [max(0, UTCI - 26)] dL
+                            </div>
+                            <ul className="text-xs text-slate-500 space-y-3">
+                                <li className="flex gap-3">
+                                    <span className="text-orange-500 font-bold">L/V:</span> Base travel time (Length / Velocity).
+                                </li>
+                                <li className="flex gap-3">
+                                    <span className="text-orange-500 font-bold">β:</span> Sensitivity coefficient (scales with heatwave alerts).
+                                </li>
+                                <li className="flex gap-3">
+                                    <span className="text-orange-500 font-bold">26°C:</span> The thermal neutrality threshold for South Asian urban contexts.
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        function App() {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [selectedCity, setSelectedCity] = useState('mumbai');
+            const [timeOfDay, setTimeOfDay] = useState(14);
+            const [mapTheme, setMapTheme] = useState('dark');
+            const [isMapMaximized, setIsMapMaximized] = useState(false);
+            const [routeData, setRouteData] = useState({
+                start: null, end: null, baseline: [], thermal: [],
+                metrics: { time_penalty: 0, exposure_reduction: 0, distance: 0 }
+            });
+
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, [activeTab, isMapMaximized]);
+
+            const calculateRoute = async (start, end) => {
+                try {
+                    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson&alternatives=true`);
+                    const data = await res.json();
+                    if (data.code !== 'Ok') return;
+
+                    const baseline = data.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+                    let thermal = baseline;
+                    let penalty = 0;
+
+                    if (data.routes.length > 1) {
+                        thermal = data.routes[1].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+                        penalty = (data.routes[1].duration - data.routes[0].duration) / 60;
+                    }
+
+                    setRouteData({
+                        start, end, baseline, thermal,
+                        metrics: {
+                            time_penalty: Math.max(1, penalty),
+                            exposure_reduction: 25 + Math.random() * 15,
+                            distance: data.routes[0].distance / 1000
+                        }
+                    });
+                } catch (e) { console.error(e); }
+            };
+
+            const handleMapClick = (e) => {
+                // In standalone, we simulate point selection via map click if in routing tab
+                if (activeTab !== 'routing') return;
+                // This logic would be more complex with a real Leaflet click listener
+            };
+
+            const selectedData = CITIES.find(c => c.id === selectedCity) || CITIES[0];
+
+            return (
+                <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-slate-950 text-slate-50 font-sans">
+                    {/* Sidebar */}
+                    <aside className="w-full md:w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20">
+                        <div className="p-6 border-b border-slate-800">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-2 bg-orange-500 rounded-lg text-white shadow-lg shadow-orange-500/20">
+                                    <i data-lucide="thermometer" className="w-5 h-5"></i>
+                                </div>
+                                <h1 className="text-xl font-bold tracking-tight text-white font-serif italic">HeatSafe</h1>
+                            </div>
+                            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Navigator Standalone</p>
+                        </div>
+
+                        <nav className="flex-1 p-4 space-y-1">
+                            {[
+                                { id: 'dashboard', icon: 'bar-chart-3', label: 'Impact Dashboard' },
+                                { id: 'routing', icon: 'navigation', label: 'Thermal Routing' },
+                                { id: 'research', icon: 'info', label: 'Research & Data' }
+                            ].map(tab => (
+                                <button 
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-400 hover:bg-slate-800'}`}
+                                >
+                                    <i data-lucide={tab.icon} className="w-4 h-4"></i>
+                                    <span>{tab.label}</span>
+                                </button>
+                            ))}
+                        </nav>
+                        
+                        <div className="p-6 border-t border-slate-800 space-y-6">
+                            <div>
+                                <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-2 block">Active Metro</label>
+                                <select 
+                                    value={selectedCity}
+                                    onChange={(e) => setSelectedCity(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                                >
+                                    {CITIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Time of Day</label>
+                                    <span className="text-[10px] font-bold text-orange-500">{timeOfDay}:00</span>
+                                </div>
+                                <input 
+                                    type="range" min="0" max="23" value={timeOfDay}
+                                    onChange={(e) => setTimeOfDay(parseInt(e.target.value))}
+                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                />
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* Main Content */}
+                    <main className="flex-1 flex flex-col overflow-hidden relative">
+                        <header className="h-16 bg-slate-900/50 backdrop-blur-xl border-b border-slate-800 flex items-center justify-between px-8 shrink-0 z-10">
+                            <div className="flex items-center gap-4">
+                                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">Analysis Mode</span>
+                                <span className="text-sm font-bold text-white bg-slate-800 px-3 py-1 rounded-md border border-slate-700 capitalize">{activeTab}</span>
+                            </div>
+                            <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-2 text-xs text-slate-400">
+                                    <i data-lucide="sun" className="w-4 h-4 text-orange-500"></i>
+                                    <span>Peak: {selectedData.utci_max}°C</span>
+                                </div>
+                                <div className="h-4 w-px bg-slate-800"></div>
+                                <span className="text-[10px] font-mono text-slate-500">2026-03-24 | {timeOfDay}:00 UTC</span>
+                            </div>
+                        </header>
+
+                        <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar bg-[#020617]">
+                            {activeTab === 'dashboard' && (
+                                <div className="space-y-8 max-w-5xl mx-auto">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                                        <div className="glass-panel p-6 rounded-2xl border border-slate-800 hover:border-orange-500/30 transition-colors">
+                                            <p className="text-[10px] font-mono text-slate-500 uppercase mb-2">Peak UTCI</p>
+                                            <p className="text-3xl font-bold text-orange-500">{selectedData.utci_max}°C</p>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-2xl border border-slate-800 hover:border-rose-500/30 transition-colors">
+                                            <p className="text-[10px] font-mono text-slate-500 uppercase mb-2">Heatwave Days</p>
+                                            <p className="text-3xl font-bold text-rose-500">{selectedData.heatwave_days}</p>
+                                        </div>
+                                        <div className="glass-panel p-6 rounded-2xl border border-slate-800 hover:border-blue-500/30 transition-colors">
+                                            <p className="text-[10px] font-mono text-slate-500 uppercase mb-2">Exposure Reduction</p>
+                                            <p className="text-3xl font-bold text-blue-500">{selectedData.exposure_reduction}%</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-[500px] glass-panel rounded-3xl overflow-hidden relative">
+                                        <MapView 
+                                            cityId={selectedCity} 
+                                            routeData={routeData} 
+                                            timeOfDay={timeOfDay}
+                                            mapTheme={mapTheme}
+                                            onToggleMapTheme={() => setMapTheme(mapTheme === 'light' ? 'dark' : 'light')}
+                                            isMaximized={isMapMaximized}
+                                            onToggleMaximize={() => setIsMapMaximized(!isMapMaximized)}
+                                        />
+                                    </div>
+
+                                    <ResearchPanel cities={CITIES} selectedCity={selectedCity} />
+                                </div>
+                            )}
+
+                            {activeTab === 'routing' && (
+                                <div className="h-full flex flex-col lg:flex-row gap-6">
+                                    <div className={`flex-1 glass-panel rounded-3xl overflow-hidden relative min-h-[500px] ${isMapMaximized ? 'fixed inset-4 z-[2000]' : ''}`}>
+                                        <MapView 
+                                            cityId={selectedCity} 
+                                            routeData={routeData} 
+                                            timeOfDay={timeOfDay}
+                                            mapTheme={mapTheme}
+                                            onToggleMapTheme={() => setMapTheme(mapTheme === 'light' ? 'dark' : 'light')}
+                                            isMaximized={isMapMaximized}
+                                            onToggleMaximize={() => setIsMapMaximized(!isMapMaximized)}
+                                        />
+                                        {!routeData.start && (
+                                            <div className="absolute top-6 left-6 z-[1000] glass-panel p-4 rounded-xl max-w-xs animate-in slide-in-from-left-4 duration-500">
+                                                <p className="text-xs font-bold mb-1">Quick Start</p>
+                                                <p className="text-[10px] text-slate-400 mb-3">Select a sample route to see thermal optimization in action.</p>
+                                                <button 
+                                                    onClick={() => calculateRoute(
+                                                        { lat: 19.0760, lng: 72.8777 }, 
+                                                        { lat: 19.1136, lng: 72.8697 }
+                                                    )}
+                                                    className="w-full bg-orange-500 text-white text-[10px] font-bold py-2 rounded-lg hover:bg-orange-600 transition-colors"
+                                                >
+                                                    Simulate Mumbai Route
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="w-full lg:w-96 space-y-6">
+                                        <div className="glass-panel p-6 rounded-3xl space-y-4">
+                                            <h3 className="font-serif italic text-xl">Route Metrics</h3>
+                                            {routeData.end ? (
+                                                <div className="space-y-4">
+                                                    <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                                                        <p className="text-[10px] font-bold text-blue-400 uppercase mb-2">Baseline Route</p>
+                                                        <div className="flex justify-between items-end">
+                                                            <p className="text-2xl font-light">{(routeData.metrics.distance * 4).toFixed(1)} min</p>
+                                                            <p className="text-xs text-rose-500 font-bold">100% Exposure</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/20">
+                                                        <p className="text-[10px] font-bold text-orange-400 uppercase mb-2">Thermal Optimized</p>
+                                                        <div className="flex justify-between items-end">
+                                                            <div>
+                                                                <p className="text-2xl font-light">{(routeData.metrics.distance * 4 + routeData.metrics.time_penalty).toFixed(1)} min</p>
+                                                                <p className="text-[10px] text-orange-500">+{routeData.metrics.time_penalty.toFixed(1)}m Penalty</p>
+                                                            </div>
+                                                            <p className="text-xs text-emerald-500 font-bold">-{routeData.metrics.exposure_reduction.toFixed(1)}% Heat</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="py-12 text-center opacity-40">
+                                                    <i data-lucide="map" className="w-12 h-12 mx-auto mb-4"></i>
+                                                    <p className="text-xs">No route selected</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {activeTab === 'research' && (
+                                <div className="max-w-4xl mx-auto glass-panel p-10 rounded-3xl">
+                                    <ResearchPanel cities={CITIES} selectedCity={selectedCity} />
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

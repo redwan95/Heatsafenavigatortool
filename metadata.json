@@ -1,0 +1,7 @@
+{
+  "name": "HeatSafe Navigator: Thermal-Aware Urban Navigation",
+  "description": "A research-driven dashboard for thermal-aware accessibility and routing in South Asia's densest metros, analyzing UTCI exposure and heatwave resilience.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

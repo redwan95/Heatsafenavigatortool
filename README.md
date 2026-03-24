@@ -1,97 +1,92 @@
-# HeatSafe Navigator: Thermal-Aware Urban Navigation
+# 🌡️ HeatSafe Navigator: Thermal-Aware Urban Navigation
 
-HeatSafe Navigator is a full-stack web application designed to help urban travelers in South Asia navigate extreme heat. It uses real-time road network data (OSRM) and simulated thermal climate indices (UTCI) to provide "thermal-aware" routing, prioritizing shaded or cooler paths over the fastest ones.
+**HeatSafe Navigator** is a cutting-edge urban navigation platform designed to optimize pedestrian and commuter routes by prioritizing thermal safety. It helps users navigate South Asian megacities by choosing routes with maximum shade and minimum heat exposure, specifically targeting the Universal Thermal Climate Index (UTCI).
 
-## Features
+---
 
-- **Dark Mode UI**: The application is permanently set to a sleek dark mode for optimal visibility and reduced eye strain.
-- **Dynamic Map Theme**: Switch between Light and Dark map tiles independently of the UI theme.
-- **Active Viewport Stats**: Real-time display of the selected city, date, and simulation time directly on the map.
-- **Thermal-Aware Routing**: Compare baseline (fastest) routes with optimized (coolest) paths.
-- **Regional Impact Analysis**: Dashboard with yearly thermal performance metrics for major South Asian cities.
-- **Research & Data Panel**: Detailed methodology, data sources (ERA5-Land, OSM), and academic citations.
-- **Interactive Heat Maps**: Visualize UTCI distribution and heat stress levels in real-time.
-- **Map Maximization**: Expand the map view for detailed spatial analysis.
+## 🚀 Quick Deployment (Vercel)
 
-## Tech Stack
+Since this project is built with **Vite + React**, Vercel is the recommended deployment platform for its "zero-config" setup.
 
-- **Frontend**: React 19, Tailwind CSS 4, Framer Motion, Lucide React.
-- **Data Visualization**: Recharts, React Leaflet.
-- **Backend**: Express.js (Node.js).
-- **Routing API**: OpenStreetMap (OSRM).
-- **Build Tool**: Vite 6.
+### Step-by-Step Vercel Deployment:
+1.  **Push to GitHub:** Ensure your project is pushed to a GitHub repository.
+    ```bash
+    git init
+    git add .
+    git commit -m "Initial commit"
+    git branch -M main
+    git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+    git push -u origin main
+    ```
+2.  **Import to Vercel:**
+    *   Log in to [Vercel.com](https://vercel.com).
+    *   Click **"Add New"** > **"Project"**.
+    *   Select your GitHub repository from the list.
+3.  **Configure & Deploy:**
+    *   Vercel will automatically detect **Vite** as the framework.
+    *   **Build Command:** `npm run build`
+    *   **Output Directory:** `dist`
+    *   Click **"Deploy"**.
+4.  **Success:** Your app will be live at `https://your-repo-name.vercel.app`.
 
-## Getting Started
+---
 
-### Prerequisites
+## 🧮 How the Calculations Work
 
-- Node.js (v18 or higher)
-- npm or yarn
+The core of HeatSafe Navigator is its **Thermal Routing Engine**. Unlike standard GPS which only looks at distance ($L$), we calculate a "Thermal Cost" ($W$) for every street segment.
 
-### Installation
+### 1. The Thermal Cost Formula
+We use a modified Dijkstra's algorithm where the weight of an edge is defined as:
 
-1. Clone the repository:
-   ```bash
-   git clone <your-repository-url>
-   cd heatsafe-navigator
-   ```
+$$W = \frac{L}{V} + \beta \times \int \max(0, UTCI - 26) \, dL$$
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+| Variable | Definition | Typical Value |
+| :--- | :--- | :--- |
+| **$W$** | Total Route Weight (Cost) | Calculated |
+| **$L$** | Segment Length | Meters |
+| **$V$** | Walking Velocity | 1.4 m/s (Standard) |
+| **$\beta$** | Heat Sensitivity Coefficient | 0.5 - 2.0 (User defined) |
+| **$UTCI$** | Thermal Index | °C |
+| **$26$** | Neutrality Threshold | 26°C (South Asian standard) |
 
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
+### 2. Concrete Example for Validation
+Imagine you have two paths to get from Point A to Point B:
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+#### **Path 1: The "Direct Sun" Route (Shortest)**
+*   **Length ($L$):** 100 meters
+*   **UTCI:** 40°C (Extremely Hot)
+*   **Calculation:**
+    *   Base Time: $100 / 1.4 = 71.4$ seconds
+    *   Heat Penalty: $0.5 \times (40 - 26) \times 100 = 700$ units
+    *   **Total Cost ($W$): 771.4**
 
-## Deployment
+#### **Path 2: The "Shaded Alley" Route (Longer)**
+*   **Length ($L$):** 150 meters (50% longer)
+*   **UTCI:** 28°C (Much Cooler)
+*   **Calculation:**
+    *   Base Time: $150 / 1.4 = 107.1$ seconds
+    *   Heat Penalty: $0.5 \times (28 - 26) \times 150 = 150$ units
+    *   **Total Cost ($W$): 257.1**
 
-### Deploy to GitHub
+**Result:** Even though Path 2 is 50 meters longer, the Navigator will choose it because its **Thermal Cost (257.1)** is significantly lower than the direct route (771.4).
 
-1. Create a new repository on GitHub.
-2. Push your local code to the new repository:
-   ```bash
-   git remote add origin <your-github-repo-url>
-   git branch -M main
-   git push -u origin main
-   ```
+---
 
-### Deploy to Cloud Run (via AI Studio)
+## 🛠 Development Process
 
-If you are using Google AI Studio, you can directly deploy this app to Cloud Run:
-1. Go to the **Settings** menu in AI Studio.
-2. Select **Deploy to Cloud Run**.
-3. Follow the prompts to authorize and deploy.
+### 1. Data Mocking
+To ensure the app works without a complex backend, we use a static JSON structure located at `/public/api/research/summary.json`. This contains:
+*   Historical UTCI data (2020-2026).
+*   City-specific heatwave statistics.
+*   Exposure reduction metrics.
 
-### Manual Production Build
+### 2. Standalone Version
+We maintain a `standalone.html` file in the root. This is a single-file version of the entire React app. It uses **UMD (Universal Module Definition)** to load React, Leaflet, and Recharts directly from CDNs, making it perfect for quick previews or simple static hosting.
 
-To build the app for production:
-```bash
-npm run build
-npm start
-```
+### 3. Routing Integration
+The app integrates with the **OSRM (Open Source Routing Machine)** API. In the "Thermal Routing" tab, we simulate the heat penalty by comparing multiple route alternatives provided by OSRM and selecting the one that minimizes the thermal integral.
 
-### Standalone Hosting
-For simple server hosting (Apache, Nginx, or shared hosting), a **`standalone.html`** file is provided in the root directory. This single file contains the entire application logic (using CDNs) and can be hosted independently without a build step.
+---
 
-## Project Structure
-
-- `src/App.tsx`: Main application logic and layout.
-- `src/components/MapView.tsx`: Interactive map component with heat zones and routing.
-- `src/components/ResearchPanel.tsx`: Detailed data and methodology panel.
-- `server.ts`: Express server handling API routes and static file serving.
-- `src/index.css`: Global styles and theme configurations.
-
-## Data Sources & Methodology
-
-- **UTCI (Universal Thermal Climate Index)**: Calculated based on air temperature, humidity, wind speed, and mean radiant temperature.
-- **ERA5-Land**: Used for historical and real-time atmospheric data.
-- **OpenStreetMap**: Provides the road network and morphological data for routing.
-
-## License
-
-This project is licensed under the MIT License.
+## 📜 License
+This project is developed for urban resilience research. All mapping data is provided by OpenStreetMap contributors.
